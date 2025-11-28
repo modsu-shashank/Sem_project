@@ -3,6 +3,133 @@ import { useNavigate } from "react-router-dom";
 import { CreditCard, Smartphone, Banknote, ArrowLeft } from "lucide-react";
 import { useCart } from "../context/CartContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
+
+const StripeCardForm = ({ orderData, totalPrice, items, onSuccess, onError, setLoading }) => {
+  const stripe = useStripe();
+  const elements = useElements();
+  const { getAuthHeaders } = useAuth();
+
+  const handleCardPayment = async () => {
+    if (!stripe || !elements) return;
+    try {
+      setLoading(true);
+      const API_BASE_URL =
+        import.meta?.env?.VITE_API_BASE_URL?.replace(/\/$/, "") ||
+        "http://localhost:5001/api";
+      const amountPaise = Math.round(Number(totalPrice || 0) * 100);
+
+      // 1) Prepare order to get orderNumber
+      const preparePayload = {
+        items: items.map((it) => ({
+          productClientId: `${it.product.id}`,
+          selectedGrade: it.selectedGrade?.name,
+          name: it.product.name,
+          quantity: it.quantity,
+          price: it.selectedGrade?.price ?? it.product.price,
+          unit: "kg",
+          image: it.product.image,
+        })),
+        shippingAddress: {
+          firstName: orderData.name,
+          street: orderData.address,
+          city: orderData.city,
+          state: orderData.state,
+          zipCode: orderData.pincode,
+          phone: orderData.phone,
+        },
+        paymentMethod: "card",
+      };
+      const prepareRes = await fetch(`${API_BASE_URL}/orders/prepare`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(preparePayload),
+      });
+      const prepareJson = await prepareRes.json();
+      if (!prepareRes.ok) {
+        throw new Error(prepareJson.message || "Failed to prepare order");
+      }
+      const orderNumber = prepareJson?.data?.orderNumber;
+
+      // 2) Create PaymentIntent including orderNumber in metadata
+      const res = await fetch(`${API_BASE_URL}/payments/create-intent`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ amount: amountPaise, currency: "inr", description: `Order ${orderNumber} for ${orderData.email}`, orderNumber }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.clientSecret) {
+        throw new Error(data.message || "Failed to create payment intent");
+      }
+      const cardElement = elements.getElement(CardElement);
+      const result = await stripe.confirmCardPayment(data.clientSecret, {
+        payment_method: {
+          card: cardElement,
+          billing_details: {
+            name: orderData.name,
+            email: orderData.email,
+            phone: orderData.phone,
+          },
+        },
+      });
+      if (result.error) {
+        throw new Error(result.error.message);
+      }
+      if (result.paymentIntent && result.paymentIntent.status === "succeeded") {
+        // 3) Mark prepared order as paid with payment details
+        try {
+          const pi = result.paymentIntent;
+          const charge = pi.charges?.data?.[0];
+          const card = charge?.payment_method_details?.card;
+          const markRes = await fetch(`${API_BASE_URL}/orders/${orderNumber}/mark-paid`, {
+            method: "PUT",
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+              payment: {
+                provider: "stripe",
+                intentId: pi.id,
+                methodId: typeof pi.payment_method === "string" ? pi.payment_method : pi.payment_method?.id,
+                amount: (pi.amount || 0) / 100,
+                currency: pi.currency,
+                status: pi.status,
+                cardBrand: card?.brand,
+                cardLast4: card?.last4,
+                receiptUrl: charge?.receipt_url,
+              },
+            }),
+          });
+          const markJson = await markRes.json();
+          if (!markRes.ok) throw new Error(markJson.message || "Failed to mark order paid");
+        } catch (e) {
+          console.error("Mark order paid failed:", e);
+        }
+        onSuccess();
+      } else {
+        throw new Error("Payment not completed");
+      }
+    } catch (err) {
+      onError(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="p-4 border rounded-lg">
+        <CardElement options={{ hidePostalCode: true }} />
+      </div>
+      <button
+        type="button"
+        onClick={handleCardPayment}
+        className="w-full bg-orange-500 text-white py-3 rounded-lg hover:bg-orange-600 transition-colors font-semibold"
+      >
+        Pay ₹{Number(totalPrice || 0).toFixed(2)}
+      </button>
+    </div>
+  );
+};
 
 const Checkout = () => {
   const { items, totalPrice, clearCart } = useCart();
@@ -21,27 +148,60 @@ const Checkout = () => {
   });
 
   const [loading, setLoading] = useState(false);
+  const stripePromise = loadStripe(import.meta?.env?.VITE_STRIPE_PUBLISHABLE_KEY || "");
 
   const handleInputChange = (e) => {
-    setOrderData((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value,
-    }));
+    setOrderData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-      // Simulate order processing
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // Clear cart and redirect
+      if (orderData.paymentMethod === "card") {
+        // Card flow handled by StripeCardForm button; no action here
+        return;
+      }
+      // Create order for COD/UPI
+      const API_BASE_URL =
+        import.meta?.env?.VITE_API_BASE_URL?.replace(/\/$/, "") ||
+        "http://localhost:5000/api";
+      const payload = {
+        items: items.map((it) => ({
+          productClientId: `${it.product.id}`,
+          selectedGrade: it.selectedGrade?.name,
+          name: it.product.name,
+          quantity: it.quantity,
+          price: it.selectedGrade?.price ?? it.product.price,
+          unit: "kg",
+          image: it.product.image,
+        })),
+        shippingAddress: {
+          firstName: orderData.name,
+          street: orderData.address,
+          city: orderData.city,
+          state: orderData.state,
+          zipCode: orderData.pincode,
+          phone: orderData.phone,
+        },
+        paymentMethod: orderData.paymentMethod,
+      };
+      // Try to save order, but don't block UX if it fails
+      try {
+        const res = await fetch(`${API_BASE_URL}/orders`, {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const j = await res.json();
+          console.warn("Order save failed:", j.message);
+        }
+      } catch (e) {
+        console.warn("Order save error:", e);
+      }
       clearCart();
-      alert(
-        "Order placed successfully! You will receive a confirmation email shortly."
-      );
+      alert("Order placed successfully! You will receive a confirmation email shortly.");
       navigate("/");
     } catch (error) {
       alert("Order failed. Please try again.");
@@ -263,13 +423,33 @@ const Checkout = () => {
                   </div>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-orange-500 text-white py-4 rounded-lg hover:bg-orange-600 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? "Processing Order..." : "Place Order"}
-                </button>
+                {orderData.paymentMethod === "card" && (
+                  <div className="mt-4">
+                    <Elements stripe={stripePromise}>
+                      <StripeCardForm
+                        orderData={orderData}
+                        totalPrice={totalPrice}
+                        items={items}
+                        setLoading={setLoading}
+                        onSuccess={() => {
+                          clearCart();
+                          alert("Payment successful! Order placed.");
+                          navigate("/");
+                        }}
+                        onError={(err) => alert(err.message || "Payment failed")}
+                      />
+                    </Elements>
+                  </div>
+                )}
+                {orderData.paymentMethod !== "card" && (
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-orange-500 text-white py-4 rounded-lg hover:bg-orange-600 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? "Processing Order..." : "Place Order"}
+                  </button>
+                )}
               </form>
             </div>
           </div>

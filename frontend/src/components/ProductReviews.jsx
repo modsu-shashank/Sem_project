@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { useAuth } from "../context/AuthContext";
+import React, { useEffect, useState } from "react";
+import { useAuth } from "../context/AuthContext.jsx";
 import { Star } from "lucide-react";
 
 const StarRating = ({ rating, onRate, clickable = true }) => {
@@ -18,29 +18,65 @@ const StarRating = ({ rating, onRate, clickable = true }) => {
   );
 };
 
-const ProductReviews = ({ product, onAddReview }) => {
-  const { user, isAuthenticated } = useAuth();
+const ProductReviews = ({ product }) => {
+  const { user, isAuthenticated, getAuthHeaders } = useAuth();
   const [newRating, setNewRating] = useState(0);
   const [newComment, setNewComment] = useState("");
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmitReview = (e) => {
+  const API_BASE_URL =
+    import.meta?.env?.VITE_API_BASE_URL?.replace(/\/$/, "") ||
+    "http://localhost:5001/api";
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+        setError("");
+        const res = await fetch(`${API_BASE_URL}/reviews?productClientId=${encodeURIComponent(product.id)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Failed to load reviews");
+        if (mounted) setReviews(Array.isArray(data.data) ? data.data : []);
+      } catch (e) {
+        if (mounted) setError(e.message || "Failed to load reviews");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [API_BASE_URL, product.id]);
+
+  const handleSubmitReview = async (e) => {
     e.preventDefault();
     if (newRating === 0 || newComment.trim() === "") {
       alert("Please provide a rating and a comment.");
       return;
     }
-
-    const reviewData = {
-      userId: user.id,
-      userName: user.name || "Anonymous",
-      rating: newRating,
-      comment: newComment,
-    };
-
-    onAddReview(product.id, reviewData);
-
-    setNewRating(0);
-    setNewComment("");
+    try {
+      const res = await fetch(`${API_BASE_URL}/reviews`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          productClientId: product.id,
+          rating: newRating,
+          comment: newComment,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to submit review");
+      // Prepend or update user's review
+      setReviews((prev) => {
+        const others = prev.filter((r) => r.user !== user?._id);
+        return [data.data, ...others];
+      });
+      setNewRating(0);
+      setNewComment("");
+    } catch (e) {
+      alert(e.message || "Failed to submit review");
+    }
   };
 
   return (
@@ -49,25 +85,25 @@ const ProductReviews = ({ product, onAddReview }) => {
         Customer Reviews
       </h3>
 
+      {loading && <div className="text-gray-600">Loading reviews...</div>}
+      {error && <div className="text-red-600 bg-red-50 p-2 rounded mb-2">{error}</div>}
       <div className="space-y-6">
-        {product.reviews && product.reviews.length > 0 ? (
-          product.reviews.map((review) => (
-            <div key={review.id} className="border-b pb-4">
+        {(!loading && reviews.length > 0) ? (
+          reviews.map((review) => (
+            <div key={review._id} className="border-b pb-4">
               <div className="flex items-center mb-2">
-                <p className="font-semibold mr-4">{review.userName}</p>
+                <p className="font-semibold mr-4">{review.userName || 'User'}</p>
                 <StarRating rating={review.rating} clickable={false} />
               </div>
               <p className="text-gray-600 mb-1">{review.comment}</p>
               <p className="text-xs text-gray-400">
-                {new Date(review.date).toLocaleDateString()}
+                {review.createdAt ? new Date(review.createdAt).toLocaleDateString() : ''}
               </p>
             </div>
           ))
-        ) : (
-          <p className="text-gray-500">
-            No reviews yet. Be the first to review!
-          </p>
-        )}
+        ) : (!loading && (
+          <p className="text-gray-500">No reviews yet. Be the first to review!</p>
+        ))}
       </div>
 
       {isAuthenticated && (

@@ -34,7 +34,7 @@ const AdminPanel = () => {
 
   // Redirect if not admin
   if (!user || user.role !== "admin") {
-    navigate("/login");
+    navigate("/admin-login");
     return null;
   }
 

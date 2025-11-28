@@ -50,7 +50,7 @@ const Cart = () => {
           <div className="lg:col-span-2 space-y-4">
             {items.map((item) => (
               <div
-                key={item.product.id}
+                key={`${item.product.id}-${item.selectedGrade.name}`}
                 className="bg-white rounded-lg shadow-md p-6"
               >
                 <div className="flex items-center space-x-6">
@@ -69,14 +69,14 @@ const Cart = () => {
                     </Link>
                     <p className="text-gray-600">{item.product.category}</p>
                     <p className="text-green-600 font-semibold">
-                      ₹{item.product.price} per kg
+                      ₹{item.selectedGrade?.price ?? item.product.price} per kg
                     </p>
                   </div>
 
                   <div className="flex items-center space-x-3">
                     <button
                       onClick={() =>
-                        updateQuantity(item.product.id, item.quantity - 1)
+                        updateQuantity(`${item.product.id}-${item.selectedGrade.name}`, item.quantity - 1)
                       }
                       className="p-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50"
                       disabled={item.quantity <= 1}
@@ -88,7 +88,7 @@ const Cart = () => {
                     </span>
                     <button
                       onClick={() =>
-                        updateQuantity(item.product.id, item.quantity + 1)
+                        updateQuantity(`${item.product.id}-${item.selectedGrade.name}`, item.quantity + 1)
                       }
                       className="p-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50"
                       disabled={item.quantity >= item.product.quantity}
@@ -99,10 +99,10 @@ const Cart = () => {
 
                   <div className="text-right">
                     <p className="text-lg font-bold text-gray-800">
-                      ₹{(item.product.price * item.quantity).toFixed(2)}
+                      ₹{((item.selectedGrade?.price ?? item.product.price) * item.quantity).toFixed(2)}
                     </p>
                     <button
-                      onClick={() => removeFromCart(item.product.id)}
+                      onClick={() => removeFromCart(`${item.product.id}-${item.selectedGrade.name}`)}
                       className="text-red-500 hover:text-red-700 mt-2"
                     >
                       <Trash2 className="h-5 w-5" />

@@ -48,8 +48,8 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
 
   const API_BASE_URL =
-    import.meta?.env?.VITE_API_BASE_URL?.replace(/\/$/, '') ||
-    'http://localhost:5000/api';
+    import.meta?.env?.VITE_API_BASE_URL?.replace(/\/$/, "") ||
+    'http://localhost:5001/api';
 
   useEffect(() => {
     try {
@@ -67,6 +67,17 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem("rgo_token");
     }
   }, []);
+
+  // Apply theme to document root
+  useEffect(() => {
+    const theme = user?.settings?.theme;
+    const root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [user?.settings?.theme]);
 
   const login = async (email, password) => {
     setLoading(true);
@@ -140,11 +151,70 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const loginWithGoogle = async (idToken) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Google sign-in failed');
+      }
+      setUser(data.data.user);
+      setToken(data.data.token);
+      try {
+        localStorage.setItem("rgo_user", JSON.stringify(data.data.user));
+        localStorage.setItem("rgo_token", data.data.token);
+      } catch {}
+      return true;
+    } catch (err) {
+      console.error('Google login error:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logout = () => {
     setUser(null);
     setToken(null);
     localStorage.removeItem("rgo_user");
     localStorage.removeItem("rgo_token");
+    try {
+      document.documentElement.classList.remove('dark');
+    } catch {}
+  };
+
+  const updateSettings = async (payload) => {
+    if (!token) throw new Error('Not authenticated');
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update settings');
+      }
+      setUser(data.data.user);
+      try {
+        localStorage.setItem("rgo_user", JSON.stringify(data.data.user));
+      } catch {}
+      return true;
+    } catch (err) {
+      console.error('Update settings error:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getAuthHeaders = () => {
@@ -159,7 +229,9 @@ export const AuthProvider = ({ children }) => {
     token,
     login,
     register,
+    loginWithGoogle,
     logout,
+    updateSettings,
     loading,
     getAuthHeaders,
     isAuthenticated: !!user && !!token,

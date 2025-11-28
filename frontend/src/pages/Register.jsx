@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth, validatePassword } from "../context/AuthContext.jsx";
-import { FcGoogle } from "react-icons/fc";
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -59,7 +58,7 @@ const Register = () => {
         dob: formData.dob,
         gender: formData.gender,
       });
-      // navigate("/user-dashboard");
+      navigate("/");
     } catch (error) {
       setError(error.message || "Registration failed. Please try again.");
     }
@@ -201,19 +200,7 @@ const Register = () => {
             <span className="ml-2">→</span>
           </button>
         </form>
-        <div className="flex items-center my-6">
-          <div className="flex-grow border-t border-gray-200"></div>
-          <span className="mx-2 text-gray-400 text-sm">or</span>
-          <div className="flex-grow border-t border-gray-200"></div>
-        </div>
-        <button
-          type="button"
-          className="w-full flex items-center justify-center gap-3 border border-gray-200 rounded-lg py-3 bg-white hover:bg-gray-50 transition-colors font-medium text-gray-700"
-          disabled
-        >
-          <FcGoogle className="text-2xl" />
-          Continue with Google
-        </button>
+        
       </div>
     </div>
   );

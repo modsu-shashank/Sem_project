@@ -4,8 +4,10 @@ const orderItemSchema = new mongoose.Schema({
   product: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product',
-    required: true
+    required: false
   },
+  productClientId: String,
+  selectedGrade: String,
   name: {
     type: String,
     required: true
@@ -66,6 +68,17 @@ const orderSchema = new mongoose.Schema({
     type: String,
     enum: ['cod', 'card', 'upi', 'netbanking', 'wallet'],
     required: true
+  },
+  payment: {
+    provider: { type: String, default: 'stripe' },
+    intentId: String,
+    methodId: String,
+    amount: Number, // in currency's smallest unit or major unit? we'll store major (e.g., INR)
+    currency: String,
+    status: String,
+    cardBrand: String,
+    cardLast4: String,
+    receiptUrl: String,
   },
   paymentStatus: {
     type: String,

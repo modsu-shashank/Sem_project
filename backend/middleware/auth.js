@@ -5,7 +5,7 @@ import { config } from '../config/config.js';
 // Generate JWT token
 export const generateToken = (userId, email, role) => {
   return jwt.sign(
-    { userId, email, role },
+    { userId, email: email || null, role },
     config.JWT_SECRET,
     { expiresIn: config.JWT_EXPIRES_IN }
   );

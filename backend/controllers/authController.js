@@ -1,14 +1,79 @@
 import User from '../models/User.js';
 import { generateToken, validatePassword } from '../middleware/auth.js';
+import { config } from '../config/config.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { OAuth2Client } from 'google-auth-library';
+
+// @desc    Check if any admin exists
+// @route   GET /api/auth/has-admin
+// @access  Public
+export const hasAdmin = async (req, res) => {
+  try {
+    const count = await User.countDocuments({ role: 'admin' }).limit(1);
+    return res.json({ success: true, data: { hasAdmin: count > 0 } });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// @desc    Create an admin user (one-time/setup guarded by ADMIN_SETUP_KEY)
+// @route   POST /api/auth/create-admin
+// @access  Protected by setup key
+export const createAdmin = async (req, res) => {
+  try {
+    const { setupKey, username, password } = req.body || {};
+
+    if (!config.ADMIN_SETUP_KEY) {
+      return res.status(500).json({ success: false, message: 'Admin setup key not configured on server' });
+    }
+    if (!setupKey || setupKey !== config.ADMIN_SETUP_KEY) {
+      return res.status(403).json({ success: false, message: 'Invalid setup key' });
+    }
+    if (!username || !password) {
+      return res.status(400).json({ success: false, message: 'Username and password are required' });
+    }
+
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({ success: false, message: 'Password validation failed', errors: passwordValidation.errors });
+    }
+
+    const normalizedUsername = String(username).toLowerCase();
+    let user = await User.findOne({ username: normalizedUsername });
+
+    if (user) {
+      // Upgrade existing user to admin
+      user.role = 'admin';
+      user.isVerified = true;
+      if (password) {
+        user.password = password;
+      }
+      await user.save();
+    } else {
+      user = new User({
+        username: normalizedUsername,
+        password,
+        role: 'admin',
+        isVerified: true,
+      });
+      await user.save();
+    }
+
+    const token = generateToken(user._id, user.email, user.role);
+    return res.status(201).json({ success: true, message: 'Admin account ready', data: { user: user.getPublicProfile(), token } });
+  } catch (error) {
+    console.error('Create admin error:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
 
 // @desc    Register user
 // @route   POST /api/auth/register
 // @access  Public
 export const register = async (req, res) => {
   try {
-    const { username, email, password, firstName, lastName, phone } = req.body;
+    const { username, email, password, firstName, lastName, phone, settings, addresses, paymentMethods } = req.body;
 
     // Validate password
     const passwordValidation = validatePassword(password);
@@ -20,33 +85,55 @@ export const register = async (req, res) => {
       });
     }
 
-    // Check if user already exists
-    const existingUser = await User.findOne({
-      $or: [{ email: email.toLowerCase() }, { username }]
-    });
-
-    if (existingUser) {
+    // Check if email already exists
+    const existingEmail = await User.findOne({ email: email.toLowerCase() });
+    if (existingEmail) {
       return res.status(400).json({
         success: false,
-        message: existingUser.email === email.toLowerCase() 
-          ? 'User with this email already exists' 
-          : 'Username already taken'
+        message: 'User with this email already exists'
       });
     }
 
-    // Generate verification token
-    const verificationToken = crypto.randomBytes(32).toString('hex');
+    // Generate a unique username if the requested one is taken
+    const slugify = (str) =>
+      String(str || '')
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-_]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-');
+
+    const desiredBase = username && username.trim().length > 0
+      ? username
+      : (email.split('@')[0] || 'user');
+    const baseUsername = slugify(desiredBase) || 'user';
+
+    let finalUsername = baseUsername;
+    let suffix = 1;
+    // Ensure uniqueness by appending incrementing suffix if necessary
+    while (await User.findOne({ username: finalUsername })) {
+      suffix += 1;
+      finalUsername = `${baseUsername}-${suffix}`;
+    }
+
+    // Generate verification token (disabled in development)
+    const isDev = config.NODE_ENV === 'development';
+    const verificationToken = isDev ? undefined : crypto.randomBytes(32).toString('hex');
 
     // Create user
     const user = new User({
-      username,
+      username: finalUsername,
       email: email.toLowerCase(),
       password,
       firstName,
       lastName,
       phone,
       verificationToken,
-      role: email === 'admin@rgo.com' ? 'admin' : 'user'
+      isVerified: isDev ? true : false,
+      role: 'user',
+      settings: settings || undefined,
+      addresses: addresses || undefined,
+      paymentMethods: paymentMethods || undefined
     });
 
     await user.save();
@@ -59,7 +146,9 @@ export const register = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'User registered successfully. Please check your email to verify your account.',
+      message: isDev
+        ? 'User registered successfully (auto-verified in development).'
+        : 'User registered successfully. Please check your email to verify your account.',
       data: {
         user: user.getPublicProfile(),
         token
@@ -75,16 +164,88 @@ export const register = async (req, res) => {
   }
 };
 
+// @desc    Login/Register with Google ID token
+// @route   POST /api/auth/google
+// @access  Public
+export const googleAuth = async (req, res) => {
+  try {
+    const { idToken } = req.body || {};
+    if (!idToken) {
+      return res.status(400).json({ success: false, message: 'idToken is required' });
+    }
+
+    if (!config.GOOGLE_CLIENT_ID) {
+      return res.status(500).json({ success: false, message: 'Google auth not configured on server' });
+    }
+
+    const client = new OAuth2Client(config.GOOGLE_CLIENT_ID);
+    const ticket = await client.verifyIdToken({ idToken, audience: config.GOOGLE_CLIENT_ID });
+    const payload = ticket.getPayload();
+    const email = (payload.email || '').toLowerCase();
+    const name = payload.name || email.split('@')[0] || 'user';
+    const given_name = payload.given_name || '';
+    const family_name = payload.family_name || '';
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Google token missing email' });
+    }
+
+    let user = await User.findOne({ email });
+    if (!user) {
+      const randomPassword = crypto.randomBytes(16).toString('hex') + 'Aa1!';
+      const slugify = (str) => String(str || '').toLowerCase().trim().replace(/[^a-z0-9\s-_]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-');
+      const baseUsername = slugify(name) || 'user';
+      let finalUsername = baseUsername;
+      let suffix = 1;
+      while (await User.findOne({ username: finalUsername })) {
+        suffix += 1;
+        finalUsername = `${baseUsername}-${suffix}`;
+      }
+
+      user = new User({
+        username: finalUsername,
+        email,
+        password: randomPassword,
+        firstName: given_name,
+        lastName: family_name,
+        isVerified: true,
+        role: email === 'admin@rgo.com' ? 'admin' : 'user'
+      });
+      await user.save();
+    }
+
+    const token = generateToken(user._id, user.email, user.role);
+    return res.json({ success: true, message: 'Login successful', data: { user: user.getPublicProfile(), token } });
+  } catch (error) {
+    console.error('Google auth error:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
 // @desc    Login user
 // @route   POST /api/auth/login
 // @access  Public
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    const identifier = String(email || '').trim();
+    console.log('[login] identifier:', identifier);
+    if (!identifier || !password) {
+      return res.status(400).json({ success: false, message: 'Email/username and password are required' });
+    }
 
-    // Find user
-    const user = await User.findOne({ email: email.toLowerCase() });
+    // Find user by email or username
+    let user = null;
+    if (identifier.includes('@')) {
+      user = await User.findOne({ email: identifier.toLowerCase() });
+      console.log('[login] searched by email, found:', !!user);
+    }
     if (!user) {
+      user = await User.findOne({ username: identifier.toLowerCase() });
+      console.log('[login] searched by username, found:', !!user);
+    }
+    if (!user) {
+      console.log('[login] no user found');
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password'
@@ -93,6 +254,7 @@ export const login = async (req, res) => {
 
     // Check password
     const isValidPassword = await user.comparePassword(password);
+    console.log('[login] password valid:', isValidPassword);
     if (!isValidPassword) {
       return res.status(401).json({
         success: false,
@@ -100,8 +262,8 @@ export const login = async (req, res) => {
       });
     }
 
-    // Check if account is verified
-    if (!user.isVerified) {
+    // Check if account is verified (required in production only)
+    if (!user.isVerified && config.NODE_ENV !== 'development') {
       return res.status(403).json({
         success: false,
         message: 'Please verify your email before logging in'

@@ -17,6 +17,8 @@ import productRoutes from "./routes/products.js";
 import orderRoutes from "./routes/orders.js";
 import userRoutes from "./routes/users.js";
 import adminRoutes from "./routes/admin.js";
+import paymentRoutes, { stripeWebhookHandler } from "./routes/payments.js";
+import reviewRoutes from "./routes/reviews.js";
 
 // Load environment variables
 dotenv.config();
@@ -72,6 +74,9 @@ const authLimiter = rateLimit({
 });
 app.use("/api/auth/", authLimiter);
 
+// Stripe webhook - must be before JSON parser to access raw body
+app.post("/api/payments/webhook", express.raw({ type: "application/json" }), stripeWebhookHandler);
+
 // Body parsing middleware
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -112,6 +117,8 @@ app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/reviews", reviewRoutes);
 
 // 404 handler
 app.use("*", (req, res) => {

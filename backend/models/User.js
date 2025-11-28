@@ -13,8 +13,9 @@ const userSchema = new mongoose.Schema(
     },
     email: {
       type: String,
-      required: [true, "Email is required"],
+      required: false,
       unique: true,
+      sparse: true,
       lowercase: true,
       trim: true,
       match: [
@@ -49,6 +50,17 @@ const userSchema = new mongoose.Schema(
       zipCode: String,
       country: String,
     },
+    addresses: [
+      {
+        label: { type: String, default: 'Home' },
+        street: String,
+        city: String,
+        state: String,
+        zipCode: String,
+        country: String,
+        isDefault: { type: Boolean, default: false },
+      },
+    ],
     role: {
       type: String,
       enum: ["user", "admin", "moderator"],
@@ -68,6 +80,34 @@ const userSchema = new mongoose.Schema(
       notifications: { type: Boolean, default: true },
       theme: { type: String, enum: ["light", "dark"], default: "light" },
     },
+    settings: {
+      theme: { type: String, enum: ["light", "dark"], default: "light" },
+      notifications: {
+        email: { type: Boolean, default: true },
+        sms: { type: Boolean, default: true },
+        push: { type: Boolean, default: true },
+      },
+      preferences: {
+        language: { type: String, default: "en" },
+        currency: { type: String, default: "USD" },
+        timezone: { type: String, default: "UTC" },
+      },
+      privacy: {
+        profileVisibility: { type: String, enum: ["public", "friends", "private"], default: "public" },
+        showEmail: { type: Boolean, default: false },
+        showPhone: { type: Boolean, default: false },
+      },
+    },
+    paymentMethods: [
+      {
+        provider: String,
+        last4: String,
+        brand: String,
+        expiryMonth: Number,
+        expiryYear: Number,
+        isDefault: { type: Boolean, default: false },
+      },
+    ],
     createdAt: {
       type: Date,
       default: Date.now,

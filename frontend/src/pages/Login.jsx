@@ -1,16 +1,21 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { FcGoogle } from "react-icons/fc";
 
 const Login = () => {
   const [formData, setFormData] = useState({
-    identifier: "",
+    email: "",
     password: "",
   });
   const [error, setError] = useState("");
-  const { login, loading } = useAuth();
+  const { login, loginWithGoogle, loading } = useAuth();
   const navigate = useNavigate();
+  const googleBtnRef = useRef(null);
+  const [googleReady, setGoogleReady] = useState(false);
+  const GOOGLE_CLIENT_ID = import.meta?.env?.VITE_GOOGLE_CLIENT_ID || "";
+  const API_BASE_URL = (import.meta?.env?.VITE_API_BASE_URL || 'http://localhost:5001/api').replace(/\/$/, "");
+  const [noAdmin, setNoAdmin] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -19,14 +24,61 @@ const Login = () => {
     });
   };
 
+  useEffect(() => {
+    // Initialize Google Identity Services button if library loaded and client id provided
+    if (!window.google || !GOOGLE_CLIENT_ID) return;
+    try {
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: async (response) => {
+          try {
+            await loginWithGoogle(response.credential);
+            navigate("/");
+          } catch (err) {
+            setError(err.message || "Google sign-in failed");
+          }
+        },
+      });
+      if (googleBtnRef.current) {
+        window.google.accounts.id.renderButton(googleBtnRef.current, {
+          theme: "outline",
+          size: "large",
+          width: 320,
+          text: "signin_with",
+          shape: "rectangular",
+          logo_alignment: "left",
+        });
+        setGoogleReady(true);
+      }
+    } catch (e) {
+      // ignore init errors, show fallback
+    }
+  }, [GOOGLE_CLIENT_ID, loginWithGoogle, navigate]);
+
+  // Check if any admin exists to optionally show setup link
+  useEffect(() => {
+    let aborted = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/auth/has-admin`);
+        const data = await res.json();
+        if (!aborted && res.ok) {
+          setNoAdmin(!data?.data?.hasAdmin);
+        }
+      } catch {
+        // ignore; don't show link on error
+      }
+    })();
+    return () => { aborted = true; };
+  }, [API_BASE_URL]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     try {
-      // Try login with email first, fallback to phone if email fails
-      await login(formData.identifier, formData.password);
-      // Redirect based on role or just to dashboard
-      // navigate("/user-dashboard");
+      // Login and redirect to home
+      await login(formData.email, formData.password);
+      navigate("/");
     } catch (error) {
       setError(error.message || "Invalid email/phone or password");
     }
@@ -52,10 +104,10 @@ const Login = () => {
         </p>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <input
-            name="identifier"
-            type="text"
-            placeholder="Email or Phone Number"
-            value={formData.identifier}
+            name="email"
+            type="email"
+            placeholder="Email"
+            value={formData.email}
             onChange={handleChange}
             required
             className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-200 focus:outline-none"
@@ -83,24 +135,16 @@ const Login = () => {
             <span className="ml-2">→</span>
           </button>
         </form>
-        <div className="flex justify-end mt-2">
-          <Link to="#" className="text-blue-500 hover:underline text-sm">
-            Forgot password?
-          </Link>
+        <div className="flex items-center justify-between mt-2">
+          <Link to="#" className="text-blue-500 hover:underline text-sm">Forgot password?</Link>
+          <Link to="/admin-login" className="text-blue-500 hover:underline text-sm">Admin login</Link>
         </div>
-        <div className="flex items-center my-6">
-          <div className="flex-grow border-t border-gray-200"></div>
-          <span className="mx-2 text-gray-400 text-sm">or</span>
-          <div className="flex-grow border-t border-gray-200"></div>
-        </div>
-        <button
-          type="button"
-          className="w-full flex items-center justify-center gap-3 border border-gray-200 rounded-lg py-3 bg-white hover:bg-gray-50 transition-colors font-medium text-gray-700"
-          disabled
-        >
-          <FcGoogle className="text-2xl" />
-          Sign In with Google
-        </button>
+        {noAdmin && (
+          <div className="mt-2 text-center">
+            <Link to="/setup-admin" className="text-xs text-gray-400 hover:text-blue-500 underline">Setup admin</Link>
+          </div>
+        )}
+        
       </div>
     </div>
   );

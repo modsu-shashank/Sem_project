@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ShoppingCart, Heart, User, LogOut } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useCart } from "../context/CartContext.jsx";
+import logo from "../images/logo.jpg";
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -19,11 +20,16 @@ const Navbar = () => {
 
   return (
     <nav className="bg-green-100 shadow-lg">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
+      <div className="w-full px-2 sm:px-4">
+        <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
             <Link to="/" className="flex-shrink-0 flex items-center">
-              <span className="text-gray-800 text-xl font-bold">
+              <img 
+                src={logo} 
+                alt="RGO Logo" 
+                className="h-10 w-auto"
+              />
+              <span className="ml-2 text-gray-800 text-xl font-bold hidden sm:inline">
                 RGO Organic Millets
               </span>
             </Link>
@@ -37,6 +43,25 @@ const Navbar = () => {
             >
               Home
             </Link>
+            {user && (
+              <Link
+                to="/user-dashboard"
+                className="text-gray-800 hover:text-green-700 transition-colors"
+              >
+                Dashboard
+              </Link>
+            )}
+            {/* {user && (
+              <Link
+                to="/settings"
+                className="text-gray-800 hover:text-green-700 transition-colors"
+              >
+                Settings
+              </Link>
+            )} */}
+            {user && (
+              <></>
+            )}
             <Link
               to="/about"
               className="text-gray-800 hover:text-green-700 transition-colors"
@@ -106,6 +131,24 @@ const Navbar = () => {
                       <div className="text-gray-500">{user.email}</div>
                     </div>
 
+                    <Link
+                      to="/user-dashboard"
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 block"
+                      onClick={() => setIsProfileOpen(false)}
+                    >
+                      Dashboard
+                    </Link>
+
+                    <Link
+                      to="/settings"
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 block"
+                      onClick={() => setIsProfileOpen(false)}
+                    >
+                      Settings
+                    </Link>
+
+                    {/* Orders link removed by request */}
+
                     {user.role === "admin" ? (
                       <Link
                         to="/admin"
@@ -169,6 +212,17 @@ const Navbar = () => {
             >
               Home
             </Link>
+            {user && (
+              <Link
+                to="/user-dashboard"
+                className="block text-gray-800 hover:text-green-700 transition-colors py-2 md:py-3"
+              >
+                Dashboard
+              </Link>
+            )}
+            {user && (
+              <></>
+            )}
             <Link
               to="/about"
               className="block text-gray-800 hover:text-green-700 transition-colors py-2 md:py-3"

@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar.jsx";
 import Home from "./pages/Home.jsx";
 import ProductDetail from "./pages/ProductDetail.jsx";
@@ -8,11 +8,17 @@ import Checkout from "./pages/Checkout.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import AdminPanel from "./pages/AdminPanel.jsx";
+import AdminLogin from "./pages/AdminLogin.jsx";
+import SetupAdmin from "./pages/SetupAdmin.jsx";
+import UserDashboard from "./pages/UserDashboard.jsx";
+import OrdersList from "./pages/OrdersList.jsx";
+import OrderDetail from "./pages/OrderDetail.jsx";
 import About from "./pages/About.jsx";
 import Contact from "./pages/Contact.jsx";
 import Feedback from "./pages/Feedback.jsx";
 import Watchlist from "./pages/Watchlist.jsx";
-import { AuthProvider } from "./context/AuthContext.jsx";
+import Settings from "./pages/Settings.jsx";
+import { AuthProvider, useAuth } from "./context/AuthContext.jsx";
 import { CartProvider } from "./context/CartContext.jsx";
 import { ProductProvider } from "./context/ProductContext.jsx";
 import { WatchlistProvider } from "./context/WatchlistContext.jsx";
@@ -57,6 +63,11 @@ class ErrorBoundary extends React.Component {
 }
 
 function App() {
+  const PrivateRoute = ({ element }) => {
+    const { isAuthenticated } = useAuth();
+    return isAuthenticated ? element : <Navigate to="/login" replace />;
+  };
+
   return (
     <ErrorBoundary>
       <AuthProvider>
@@ -73,12 +84,36 @@ function App() {
                       <Route path="/cart" element={<Cart />} />
                       <Route path="/checkout" element={<Checkout />} />
                       <Route path="/login" element={<Login />} />
+                      <Route path="/admin-login" element={<AdminLogin />} />
+                      <Route path="/setup-admin" element={<SetupAdmin />} />
                       <Route path="/register" element={<Register />} />
-                      <Route path="/admin" element={<AdminPanel />} />
+                      <Route
+                        path="/admin"
+                        element={<PrivateRoute element={<AdminPanel />} />}
+                      />
                       <Route path="/about" element={<About />} />
                       <Route path="/contact" element={<Contact />} />
                       <Route path="/feedback" element={<Feedback />} />
-                      <Route path="/watchlist" element={<Watchlist />} />
+                      <Route
+                        path="/watchlist"
+                        element={<PrivateRoute element={<Watchlist />} />}
+                      />
+                      <Route
+                        path="/user-dashboard"
+                        element={<PrivateRoute element={<UserDashboard />} />}
+                      />
+                      <Route
+                        path="/settings"
+                        element={<PrivateRoute element={<Settings />} />}
+                      />
+                      <Route
+                        path="/orders"
+                        element={<PrivateRoute element={<OrdersList />} />}
+                      />
+                      <Route
+                        path="/orders/:id"
+                        element={<PrivateRoute element={<OrderDetail />} />}
+                      />
                     </Routes>
                   </main>
                 </div>

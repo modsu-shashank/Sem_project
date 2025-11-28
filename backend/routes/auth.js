@@ -11,6 +11,7 @@ import {
   logout
 } from '../controllers/authController.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { googleAuth, createAdmin, hasAdmin } from '../controllers/authController.js';
 
 const router = express.Router();
 
@@ -20,6 +21,9 @@ router.post('/login', login);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
 router.post('/verify-email', verifyEmail);
+router.post('/google', googleAuth);
+router.post('/create-admin', createAdmin);
+router.get('/has-admin', hasAdmin);
 
 // Protected routes
 router.get('/profile', authenticateToken, getProfile);
