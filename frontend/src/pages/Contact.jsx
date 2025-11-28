@@ -19,7 +19,7 @@ const Contact = () => {
       <p className="mb-6 text-gray-700">
         Have a question or feedback? Fill out the form below or email us at{" "}
         <a href="mailto:support@rgo.com" className="text-orange-600 underline">
-          support@rgo.com
+          rgomillets@gmail.com
         </a>
         .
       </p>
@@ -74,13 +74,14 @@ const Contact = () => {
       )}
       <div className="mt-8 text-gray-600">
         <p>
-          <strong>Email:</strong> support@rgo.com
+          <strong>Email:</strong> rgomillets@gmail.com
+
         </p>
         <p>
-          <strong>Phone:</strong> +91 12345 67890
+          <strong>Phone:</strong> +91 7010154545
         </p>
         <p>
-          <strong>Address:</strong> 123, Organic Lane, Healthy City, India
+          <strong>Address:</strong> 7-41,  Hyderabad, India
         </p>
       </div>
     </div>
