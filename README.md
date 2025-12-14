@@ -1,3 +1,5 @@
+<img width="1887" height="905" alt="Screenshot 2025-12-14 203840" src="https://github.com/user-attachments/assets/65c96606-82cd-472c-81a1-73a55baa3551" />
+
 # RGO Organic Millets - Full Stack Application
 
 A comprehensive e-commerce platform for organic millets and grains, built with modern web technologies.
