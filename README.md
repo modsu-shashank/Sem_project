@@ -1,3 +1,9 @@
+<img width="1919" height="918" alt="Screenshot 2025-12-14 203644" src="https://github.com/user-attachments/assets/226f0302-77ec-4c12-920d-91e6209a7b24" />
+
+<img width="1902" height="914" alt="Screenshot 2025-12-14 203655" src="https://github.com/user-attachments/assets/d871b3cb-b168-4535-8c6d-fbfa5e21eb86" />
+
+<img width="1892" height="863" alt="Screenshot 2025-12-14 203825" src="https://github.com/user-attachments/assets/6afff7cf-5173-4823-9385-e26aee4c8913" />
+
 <img width="1887" height="905" alt="Screenshot 2025-12-14 203840" src="https://github.com/user-attachments/assets/65c96606-82cd-472c-81a1-73a55baa3551" />
 
 # RGO Organic Millets - Full Stack Application
